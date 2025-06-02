@@ -9,6 +9,7 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  unreadMessages: {},
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -27,12 +28,10 @@ export const useChatStore = create((set, get) => ({
     if (!socket) return;
 
     socket.on("userConnected", async () => {
-      // Refresh users list when a new user connects
       await get().getUsers();
     });
 
     socket.on("userDisconnected", async () => {
-      // Refresh users list when a user disconnects
       await get().getUsers();
     });
   },
@@ -50,23 +49,17 @@ export const useChatStore = create((set, get) => ({
     try {
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
+      // Clear unread count for this user
+      set((state) => ({
+        unreadMessages: {
+          ...state.unreadMessages,
+          [userId]: 0,
+        },
+      }));
     } catch (error) {
       toast.error(error.response.data.message);
     } finally {
       set({ isMessagesLoading: false });
-    }
-  },
-
-  sendMessage: async (messageData) => {
-    const { selectedUser, messages } = get();
-    try {
-      const res = await axiosInstance.post(
-        `/messages/send/${selectedUser._id}`,
-        messageData
-      );
-      set({ messages: [...messages, res.data] });
-    } catch (error) {
-      toast.error(error.response.data.message);
     }
   },
 
@@ -85,11 +78,46 @@ export const useChatStore = create((set, get) => ({
         messages: [...get().messages, newMessage],
       });
     });
+
+    socket.on("newUnreadMessage", ({ senderId }) => {
+      // Increment unread count for the sender
+      set((state) => ({
+        unreadMessages: {
+          ...state.unreadMessages,
+          [senderId]: (state.unreadMessages[senderId] || 0) + 1,
+        },
+      }));
+    });
+
+    socket.on("messagesRead", ({ readerId }) => {
+      // Clear unread count when messages are read
+      set((state) => ({
+        unreadMessages: {
+          ...state.unreadMessages,
+          [readerId]: 0,
+        },
+      }));
+    });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     socket.off("newMessage");
+    socket.off("newUnreadMessage");
+    socket.off("messagesRead");
+  },
+
+  sendMessage: async (messageData) => {
+    const { selectedUser, messages } = get();
+    try {
+      const res = await axiosInstance.post(
+        `/messages/send/${selectedUser._id}`,
+        messageData
+      );
+      set({ messages: [...messages, res.data] });
+    } catch (error) {
+      toast.error(error.response.data.message);
+    }
   },
 
   setSelectedUser: (selectedUser) => {

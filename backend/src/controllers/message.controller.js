@@ -11,7 +11,22 @@ export const getUsersForSidebar = async (req, res) => {
       _id: { $ne: loggedInUserId },
     }).select("-password");
 
-    res.status(200).json(filteredUsers);
+    // Get unread message counts for each user
+    const usersWithUnreadCounts = await Promise.all(
+      filteredUsers.map(async (user) => {
+        const unreadCount = await Message.countDocuments({
+          senderId: user._id,
+          receiverId: loggedInUserId,
+          read: false,
+        });
+        return {
+          ...user.toObject(),
+          unreadCount,
+        };
+      })
+    );
+
+    res.status(200).json(usersWithUnreadCounts);
   } catch (error) {
     console.error("Error in getUsersForSidebar: ", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -29,6 +44,27 @@ export const getMessages = async (req, res) => {
         { senderId: userToChatId, receiverId: myId },
       ],
     });
+
+    // Mark messages as read when fetching them
+    await Message.updateMany(
+      {
+        senderId: userToChatId,
+        receiverId: myId,
+        read: false,
+      },
+      {
+        read: true,
+        readAt: new Date(),
+      }
+    );
+
+    // Emit message read event
+    const receiverSocketId = getReceiverSocketId(userToChatId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("messagesRead", {
+        readerId: myId,
+      });
+    }
 
     res.status(200).json(messages);
   } catch (error) {
@@ -55,6 +91,7 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text,
       image: imageUrl,
+      read: false,
     });
 
     await newMessage.save();
@@ -62,6 +99,10 @@ export const sendMessage = async (req, res) => {
     const receiverSocketId = getReceiverSocketId(receiverId);
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
+      io.to(receiverSocketId).emit("newUnreadMessage", {
+        senderId,
+        messageId: newMessage._id,
+      });
     }
 
     res.status(201).json(newMessage);

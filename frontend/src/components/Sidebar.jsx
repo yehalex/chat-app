@@ -13,6 +13,7 @@ const Sidebar = () => {
     isUsersLoading,
     subscribeToUsers,
     unsubscribeFromUsers,
+    unreadMessages,
   } = useChatStore();
 
   const { onlineUsers } = useAuthStore();
@@ -85,8 +86,15 @@ const Sidebar = () => {
             </div>
 
             {/* User info - only visible on larger screens */}
-            <div className="hidden lg:block text-left min-w-0">
-              <div className="font-medium truncate">{user.fullName}</div>
+            <div className="hidden lg:block text-left min-w-0 flex-1">
+              <div className="font-medium truncate flex items-center justify-between">
+                <span>{user.fullName}</span>
+                {unreadMessages[user._id] > 0 && (
+                  <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                    {unreadMessages[user._id]}
+                  </span>
+                )}
+              </div>
               <div className="text-sm text-zinc-400">
                 {onlineUsers.includes(user._id) ? "Online" : "Offline"}
               </div>
