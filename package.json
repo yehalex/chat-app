@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/yehalex/chat-app/issues"
   },
-  "homepage": "https://github.com/yehalex/chat-app#readme"
+  "homepage": "https://github.com/yehalex/chat-app#readme",
+  "engines": {
+    "node": "20.x"
+  }
 }
