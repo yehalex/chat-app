@@ -1,4 +1,4 @@
-import { generateToken } from "../lib/utils.js";
+import { generateTokens } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
@@ -29,7 +29,7 @@ export const signup = async (req, res) => {
     });
 
     if (newUser) {
-      generateToken(res, newUser._id);
+      const { accessToken } = generateTokens(res, newUser._id);
       await newUser.save();
 
       res.status(201).json({
@@ -37,6 +37,7 @@ export const signup = async (req, res) => {
         email: newUser.email,
         fullName: newUser.fullName,
         profilePic: newUser.profilePic,
+        accessToken,
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -66,13 +67,14 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    generateToken(res, user._id);
+    const { accessToken } = generateTokens(res, user._id);
 
     res.status(200).json({
       _id: user._id,
       email: user.email,
       fullName: user.fullName,
       profilePic: user.profilePic,
+      accessToken,
     });
   } catch (error) {
     console.log("Error in login controller", error);
@@ -82,10 +84,20 @@ export const login = async (req, res) => {
 
 export const logout = (req, res) => {
   try {
-    res.cookie("jwt", "", { maxAge: 0 });
+    res.cookie("refreshToken", "", { maxAge: 0 });
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.log("Error in logout controller", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const refresh = async (req, res) => {
+  try {
+    const { accessToken } = generateTokens(res, req.user._id);
+    res.status(200).json({ accessToken });
+  } catch (error) {
+    console.log("Error in refresh controller", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
